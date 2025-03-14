@@ -1,0 +1,175 @@
+@page "/"
+@using TorontoDineSafeApp.Models
+@using TorontoDineSafeApp.Services
+@inject DineSafeService DineSafeService
+@inject MapJsInterop MapJsInterop
+@implements IAsyncDisposable
+
+<PageTitle>Toronto DineSafe Map</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h1>Toronto DineSafe Map</h1>
+            <p>This map shows food establishments in Toronto and their inspection results.</p>
+        </div>
+    </div>
+    
+    <div class="row mb-3">
+        <div class="col">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Filters</h5>
+                        <button class="btn btn-primary" @onclick="ApplyFilters">Apply Filters</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="statusFilter">Establishment Status</label>
+                                <select class="form-control" id="statusFilter" @bind="StatusFilter">
+                                    <option value="">All</option>
+                                    <option value="Pass">Pass</option>
+                                    <option value="Conditional Pass">Conditional Pass</option>
+                                    <option value="Closed">Closed</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="severityFilter">Severity</label>
+                                <select class="form-control" id="severityFilter" @bind="SeverityFilter">
+                                    <option value="">All</option>
+                                    <option value="M">Minor (M)</option>
+                                    <option value="S">Significant (S)</option>
+                                    <option value="C">Crucial (C)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="establishmentTypeFilter">Establishment Type</label>
+                                <select class="form-control" id="establishmentTypeFilter" @bind="EstablishmentTypeFilter">
+                                    <option value="">All</option>
+                                    @foreach (var type in EstablishmentTypes)
+                                    {
+                                        <option value="@type">@type</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col">
+            @if (IsLoading)
+            {
+                <div class="d-flex justify-content-center my-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            }
+            else if (ErrorMessage != null)
+            {
+                <div class="alert alert-danger" role="alert">
+                    @ErrorMessage
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Map</h5>
+                            <span>Showing @FilteredRecords.Count out of @AllRecords.Count establishments</span>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="map"></div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<DineSafeRecord> AllRecords { get; set; } = new List<DineSafeRecord>();
+    private List<DineSafeRecord> FilteredRecords { get; set; } = new List<DineSafeRecord>();
+    private HashSet<string> EstablishmentTypes { get; set; } = new HashSet<string>();
+    private bool IsLoading { get; set; } = true;
+    private string ErrorMessage { get; set; }
+    
+    // Filter properties
+    private string StatusFilter { get; set; } = "";
+    private string SeverityFilter { get; set; } = "";
+    private string EstablishmentTypeFilter { get; set; } = "";
+    
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Load data
+            AllRecords = await DineSafeService.GetDineSafeDataAsync();
+            
+            // Extract unique establishment types for filter dropdown
+            foreach (var record in AllRecords)
+            {
+                if (!string.IsNullOrEmpty(record.EstablishmentType))
+                {
+                    EstablishmentTypes.Add(record.EstablishmentType);
+                }
+            }
+            
+            // Apply initial filtering
+            ApplyFilters();
+            
+            IsLoading = false;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading data: {ex.Message}";
+            IsLoading = false;
+        }
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await MapJsInterop.InitializeMapAsync();
+            await UpdateMapMarkersAsync();
+        }
+    }
+    
+    private void ApplyFilters()
+    {
+        FilteredRecords = AllRecords.Where(record => 
+            (string.IsNullOrEmpty(StatusFilter) || record.EstablishmentStatus == StatusFilter) &&
+            (string.IsNullOrEmpty(SeverityFilter) || record.Severity == SeverityFilter) &&
+            (string.IsNullOrEmpty(EstablishmentTypeFilter) || record.EstablishmentType == EstablishmentTypeFilter)
+        ).ToList();
+        
+        InvokeAsync(UpdateMapMarkersAsync);
+    }
+    
+    private async Task UpdateMapMarkersAsync()
+    {
+        if (!IsLoading && FilteredRecords.Any())
+        {
+            await MapJsInterop.AddMarkersAsync(FilteredRecords);
+        }
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        // Clean up resources if needed
+    }
+}
