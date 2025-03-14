@@ -62,14 +62,16 @@ dotnet run
 
 ## Data Source
 
+#### Data Refresh Rate: Daily
+
 This application uses data from the [City of Toronto's DineSafe program](https://open.toronto.ca/dataset/dinesafe/), which provides information about food safety inspections of restaurants and other food establishments in Toronto.
-
-## License
-
-[MIT License](LICENSE)
 
 ## Acknowledgements
 
 - City of Toronto Open Data Portal for providing the DineSafe dataset
 - OpenStreetMap contributors for map data
 - Leaflet.js for mapping functionality
+
+# TODO:
+
+- fix requests to the Toronto Open Data Portal
